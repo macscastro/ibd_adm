@@ -37,6 +37,8 @@ parser$add_argument("--out", dest = "out_file",
   help = "Output distance-matrix .rds (m_d)")
 parser$add_argument("--dist_method", dest = "dist_method", type = "character",
   default = "cosine", help = "Distance method for parDist [default %(default)s]")
+parser$add_argument("--fast_cosine", dest = "fast_cosine", action = "store_true",
+  default = FALSE, help = "Use a BLAS tcrossprod fast path when dist_method is cosine")
 parser$add_argument("--normalize_ibd_vectors", dest = "normalize_ibd_vectors",
   action = "store_true", default = FALSE,
   help = "L2-normalize per-sample IBD vectors before distance calculation")
@@ -62,11 +64,7 @@ m_use <- apply_feature_transforms(
 )
 
 cat("__ computing distance matrix __\n")
-m_d <- if (identical(args$dist_method, "cosine")) {
-  # Cosine distance has an exact BLAS-3 form: L2-normalize the rows, then one Gram
-  # matrix (tcrossprod). Optimized multithreaded BLAS computes this ~2,860x faster
-  # than parDist's pairwise evaluation, with a numerically identical result
-  # (max abs diff 1.4e-15 on a 2,000-sample test). parDist is kept for other metrics.
+m_d <- if (isTRUE(args$fast_cosine) && identical(args$dist_method, "cosine")) {
   nrm  <- sqrt(rowSums(m_use * m_use))
   zero <- nrm == 0
   nrm[zero] <- 1
